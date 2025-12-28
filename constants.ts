@@ -1,11 +1,15 @@
 
-import { ValvePosition, RadiatorSpecs, ProjectDetails, RadiatorSeries } from './types';
+import { ValvePosition, RadiatorSpecs, Project, RadiatorSeries, GlobalSettings } from './types';
 
 export const PIPE_DIAMETERS = [
   'N.D.', '10 mm', '12 mm', '14 mm', '15 mm', '16 mm', '18 mm', '20 mm', '22 mm', '26 mm', '28 mm', '3/8"', '1/2"', '3/4"', '1"'
 ];
 
-export const PIPE_MATERIALS = ['N.D.', 'Rame', 'Ferro'];
+export const PIPE_MATERIALS = ['N.D.', 'Rame', 'Ferro', 'Multistrato'];
+
+export const INITIAL_SETTINGS: GlobalSettings = {
+  wattCoefficient: 30
+};
 
 export const INITIAL_SPECS: RadiatorSpecs = {
   surface: 20,
@@ -15,6 +19,7 @@ export const INITIAL_SPECS: RadiatorSpecs = {
   valveWallDistance: 50,
   nicheWidth: 0,
   nicheHeight: 0,
+  valveHeight: 0,
   maxWidth: 0,
   hasDiaphragm: false,
   series: RadiatorSeries.TESI3,
@@ -22,8 +27,12 @@ export const INITIAL_SPECS: RadiatorSpecs = {
   pipeMaterial: 'N.D.'
 };
 
-export const INITIAL_PROJECT: ProjectDetails = {
+export const createInitialProject = (): Project => ({
+  id: Math.random().toString(36).substr(2, 9),
   clientName: '',
   clientSurname: '',
-  siteAddress: ''
-};
+  siteAddress: '',
+  environments: [
+    { id: 'env-1', name: 'Ambiente 1', specs: { ...INITIAL_SPECS } }
+  ]
+});

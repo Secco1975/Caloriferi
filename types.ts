@@ -20,6 +20,7 @@ export interface RadiatorSpecs {
   valveWallDistance: number; // mm
   nicheWidth: number; // mm
   nicheHeight: number; // mm (altezza nicchia)
+  valveHeight: number; // mm (altezza valvola dal fondo nicchia)
   maxWidth: number; // mm
   manualElements?: number; // Override manuale numero elementi
   hasDiaphragm: boolean;
@@ -37,6 +38,7 @@ export interface RadiatorModel {
   interaxis: number;
   watts: number;
   series?: RadiatorSeries;
+  brand?: string; // Brand name (e.g., Fondital)
 }
 
 export interface Environment {
@@ -45,10 +47,16 @@ export interface Environment {
   specs: RadiatorSpecs;
 }
 
-export interface ProjectDetails {
+export interface Project {
+  id: string;
   clientName: string;
   clientSurname: string;
   siteAddress: string;
+  environments: Environment[];
+}
+
+export interface GlobalSettings {
+  wattCoefficient: number;
 }
 
 export interface CalculationResult {

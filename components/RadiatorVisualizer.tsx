@@ -25,6 +25,7 @@ export const RadiatorVisualizer: React.FC<RadiatorVisualizerProps> = React.memo(
     valveCenterDistance, 
     nicheWidth, 
     nicheHeight, 
+    valveHeight,
     maxWidth, 
     hasDiaphragm
   } = specs;
@@ -53,12 +54,23 @@ export const RadiatorVisualizer: React.FC<RadiatorVisualizerProps> = React.memo(
     const radWidth = displayWidth * SCALE;
     const radHeight = Math.max(valveCenterDistance + 100, 50) * SCALE;
     
-    const radX = offsetX + (canvasWidth - radWidth) / 2;
-    const radY = offsetY + (canvasHeight - radHeight) / 2;
-
     const elementWidth = 45;
     const tubeWidth = 25 * SCALE; 
     const tubeCount = Math.floor(displayWidth / elementWidth);
+
+    // Calculate Y Position based on valveHeight if present, otherwise center
+    let radY: number;
+    if (valveHeight > 0) {
+      // Position the radiator so the valve center matches the valveHeight from the bottom
+      // Distance from radiator bottom to valve center is roughly 5 * SCALE in this visualizer
+      const valveOffsetFromRadBottom = 5 * SCALE;
+      const targetValveY = offsetY + canvasHeight - (valveHeight * SCALE);
+      radY = targetValveY - (radHeight - valveOffsetFromRadBottom);
+    } else {
+      radY = offsetY + (canvasHeight - radHeight) / 2;
+    }
+
+    const radX = offsetX + (canvasWidth - radWidth) / 2;
 
     return {
       VIEWBOX_SIZE,
@@ -77,7 +89,7 @@ export const RadiatorVisualizer: React.FC<RadiatorVisualizerProps> = React.memo(
       displayWidth,
       maxWidth
     };
-  }, [nicheWidth, nicheHeight, calculatedWidth, maxWidth, valveCenterDistance]);
+  }, [nicheWidth, nicheHeight, valveHeight, calculatedWidth, maxWidth, valveCenterDistance]);
 
   const statusColor = useMemo(() => {
     if (!realWatts || !requiredWatts) return 'bg-slate-900';
@@ -212,6 +224,18 @@ export const RadiatorVisualizer: React.FC<RadiatorVisualizerProps> = React.memo(
             />
           )}
         </g>
+
+        {/* Valve Height Indicator if set */}
+        {valveHeight > 0 && (
+          <g stroke="#ef4444" strokeWidth="1" strokeDasharray="4,2 opacity-40">
+            <line 
+              x1={offsetX - 10} 
+              y1={offsetY + canvasHeight - (valveHeight * SCALE)} 
+              x2={offsetX + canvasWidth + 10} 
+              y2={offsetY + canvasHeight - (valveHeight * SCALE)} 
+            />
+          </g>
+        )}
 
         {/* Radiator Width Dimension Line */}
         <g stroke="#334155" strokeWidth="1" strokeDasharray="2,2">
