@@ -93,16 +93,16 @@ const App: React.FC = () => {
     const finalElements = env.specs.manualElements ?? baseElements;
     
     // Calcolo Ingombri
-    // L'ingombro totale è calcolato sottraendo la "distanza valvola lato" (misura dal centro valvola in poi)
+    // L'ingombro totale è calcolato a partire dal centro della valvola (senza sideValveDistance)
     const bodyLength = finalElements * 45;
     const { sideValveDistance, valvePosition, maxWidth } = env.specs;
     let totalOccupiedWidth = 0;
     
     if (valvePosition === ValvePosition.BOTTOM) {
-      // FORMULA BASSE (senza sideValveDistance): 52 (V1 a corpo) + Lunghezza Corpo + 52 (corpo a V2) + 50 (oltre V2)
+      // FORMULA BASSE: 52 (V1 a corpo) + Lunghezza Corpo + 52 (corpo a V2) + 50 (oltre V2)
       totalOccupiedWidth = 52 + bodyLength + 52 + 50;
     } else {
-      // FORMULA LATERALE (senza sideValveDistance): 52 (V a corpo) + Lunghezza Corpo + 62 (lato opposto)
+      // FORMULA LATERALE: 52 (V a corpo) + Lunghezza Corpo + 62 (lato opposto)
       totalOccupiedWidth = 52 + bodyLength + 62;
     }
     
@@ -113,7 +113,7 @@ const App: React.FC = () => {
 
     let hasClearanceIssue = false;
 
-    // Controllo vs Ingombro Max (calcolato come nicheWidth - sideValveDistance)
+    // Controllo vs Ingombro Max
     if (maxWidth > 0 && totalOccupiedWidth > maxWidth) {
       hasClearanceIssue = true;
     }
@@ -412,7 +412,9 @@ const App: React.FC = () => {
 
         {/* Schema Riepilogativo Progetto (No print) */}
         <div className="no-print mt-12 bg-white p-8 rounded-3xl border border-slate-200 shadow-sm">
-           <h3 className="text-lg font-black text-slate-900 uppercase tracking-widest mb-6">Schema Riepilogativo Progetto</h3>
+           <h3 className="text-lg font-black text-slate-900 uppercase tracking-widest mb-6">
+             Abaco Caloriferi - {activeProject.siteAddress || '(Senza Indirizzo)'} - {activeProject.clientSurname || '(N.D.)'} {activeProject.clientName}
+           </h3>
            <div className="overflow-x-auto">
              <table className="w-full text-left text-sm">
                <thead>
