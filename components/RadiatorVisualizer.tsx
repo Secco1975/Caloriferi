@@ -51,48 +51,39 @@ export const RadiatorVisualizer: React.FC<RadiatorVisualizerProps> = React.memo(
     const elementWidth = 45;
     const tubeWidth = 25 * SCALE; 
 
-    // GEOMETRY RULES (Requirement B)
-    // Valves are EXTERNAL.
-    // Corpo starts 50mm AFTER valve center.
+    // GEOMETRIA INSTALLAZIONE
     let radX: number;
     let v1X: number;
     let v2X: number | null = null;
 
     if (valvePosition === ValvePosition.BOTTOM) {
-      // Valve 1 is at sideValveDistance from left
       v1X = offsetX + sideValveDistance * SCALE;
-      // Body starts 50mm later
       radX = v1X + 50 * SCALE;
-      // Valve 2 is 50mm after body end
       v2X = radX + radWidth + 50 * SCALE;
     } else if (valvePosition === ValvePosition.LEFT) {
       v1X = offsetX + sideValveDistance * SCALE;
       radX = v1X + 50 * SCALE;
     } else { // RIGHT
-      // Valve is at sideValveDistance from right
       v1X = (offsetX + canvasWidth) - sideValveDistance * SCALE;
-      // Body is 50mm towards left
       radX = v1X - 50 * SCALE - radWidth;
     }
 
-    // VERTICAL POSITIONING
     const targetValveY = offsetY + canvasHeight - (valveHeight * SCALE);
-    const valveOffsetFromRadBottom = 5 * SCALE; // stylized offset for valves on bottom rail
-    const radY = targetValveY - (radHeight - valveOffsetFromRadBottom);
+    const radY = targetValveY - (radHeight - 5 * SCALE);
 
-    // QUOTE DATA (Requirement D)
+    // DATI QUOTE
     const quotes = {
       nicheToV1: sideValveDistance,
-      v1ToV2: (v2X && v1X) ? (v2X - v1X) / SCALE : 0,
-      v2ToRight: (v2X) ? nicheWidth - (v2X - offsetX) / SCALE : 0,
-      radWidthMm: displayWidth,
+      v1ToV2: (v2X && v1X) ? Math.round((v2X - v1X) / SCALE) : 0,
+      v2ToRight: (v2X) ? Math.round(nicheWidth - (v2X - offsetX) / SCALE) : 0,
+      radWidthMm: Math.round(displayWidth),
       radToOpposite: 0
     };
 
     if (valvePosition === ValvePosition.LEFT) {
-      quotes.radToOpposite = nicheWidth - (radX - offsetX + radWidth) / SCALE;
+      quotes.radToOpposite = Math.round(nicheWidth - (radX - offsetX + radWidth) / SCALE);
     } else if (valvePosition === ValvePosition.RIGHT) {
-      quotes.radToOpposite = (radX - offsetX) / SCALE;
+      quotes.radToOpposite = Math.round((radX - offsetX) / SCALE);
     }
 
     return {
@@ -125,7 +116,7 @@ export const RadiatorVisualizer: React.FC<RadiatorVisualizerProps> = React.memo(
   const isErrOpp = (valvePosition !== ValvePosition.BOTTOM) && quotes.radToOpposite < 50;
 
   return (
-    <div className="bg-white p-6 rounded-2xl flex flex-col items-center border border-slate-200 w-full shadow-inner">
+    <div className="bg-white p-6 rounded-2xl flex flex-col items-center border border-slate-200 w-full shadow-inner tech-font">
       <div className="mb-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest border-b pb-1 w-full text-center">Prospetto Tecnico Dinamico</div>
       
       <svg viewBox={`0 0 ${VIEWBOX_SIZE} ${VIEWBOX_SIZE}`} className="w-full h-auto drop-shadow-md" style={{ maxHeight: '400px' }}>
@@ -149,25 +140,25 @@ export const RadiatorVisualizer: React.FC<RadiatorVisualizerProps> = React.memo(
         <circle cx={v1X} cy={targetValveY} r={FIXED_DOT_RADIUS} fill="#ef4444" />
         {v2X && <circle cx={v2X} cy={targetValveY} r={FIXED_DOT_RADIUS} fill="#ef4444" />}
 
-        {/* Quotes (Requirement D) */}
-        <g stroke="#94a3b8" strokeWidth="1" fontSize="9" fontWeight="bold">
+        {/* QUOTE DINAMICHE */}
+        <g stroke="#94a3b8" strokeWidth="1" fontSize="10" fontWeight="bold">
           {valvePosition === ValvePosition.BOTTOM ? (
             <>
-              {/* Niche to V1 */}
+              {/* Distanza Nicchia-Valvola SX */}
               <line x1={offsetX} y1={radY + radHeight + 15} x2={v1X} y2={radY + radHeight + 15} strokeDasharray="2,2" stroke={isErrV1 ? '#ef4444' : '#94a3b8'} />
-              <text x={offsetX + (v1X - offsetX)/2} y={radY + radHeight + 25} textAnchor="middle" fill={isErrV1 ? '#ef4444' : '#64748b'}>{Math.round(quotes.nicheToV1)}</text>
+              <text x={offsetX + (v1X - offsetX)/2} y={radY + radHeight + 25} textAnchor="middle" fill={isErrV1 ? '#ef4444' : '#64748b'}>{quotes.nicheToV1}</text>
               
-              {/* Int. Valvole */}
+              {/* Distanza tra le due Valvole */}
               <line x1={v1X} y1={radY + radHeight + 15} x2={v2X!} y2={radY + radHeight + 15} strokeDasharray="2,2" />
-              <text x={v1X + (v2X! - v1X)/2} y={radY + radHeight + 25} textAnchor="middle" fill="#64748b">Int: {Math.round(quotes.v1ToV2)}</text>
+              <text x={v1X + (v2X! - v1X)/2} y={radY + radHeight + 25} textAnchor="middle" fill="#64748b">Int. Valv: {quotes.v1ToV2}</text>
 
-              {/* V2 to Right edge */}
+              {/* Distanza Nicchia-Valvola DX */}
               <line x1={v2X!} y1={radY + radHeight + 15} x2={offsetX + canvasWidth} y2={radY + radHeight + 15} strokeDasharray="2,2" stroke={isErrV2 ? '#ef4444' : '#94a3b8'} />
-              <text x={v2X! + (offsetX + canvasWidth - v2X!)/2} y={radY + radHeight + 25} textAnchor="middle" fill={isErrV2 ? '#ef4444' : '#64748b'}>{Math.round(quotes.v2ToRight)}</text>
+              <text x={v2X! + (offsetX + canvasWidth - v2X!)/2} y={radY + radHeight + 25} textAnchor="middle" fill={isErrV2 ? '#ef4444' : '#64748b'}>{quotes.v2ToRight}</text>
             </>
           ) : (
             <>
-              {/* Side to Valve */}
+              {/* Distanza Nicchia-Valvola (Lato Impianto) */}
               <line 
                 x1={valvePosition === ValvePosition.LEFT ? offsetX : v1X} 
                 y1={radY + radHeight + 15} 
@@ -182,10 +173,10 @@ export const RadiatorVisualizer: React.FC<RadiatorVisualizerProps> = React.memo(
                 textAnchor="middle" 
                 fill={isErrV1 ? '#ef4444' : '#64748b'}
               >
-                {Math.round(quotes.nicheToV1)}
+                {quotes.nicheToV1}
               </text>
 
-              {/* Radiator to opposite side */}
+              {/* Distanza Calorifero-Lato Opposto */}
               <line 
                 x1={valvePosition === ValvePosition.LEFT ? radX + radWidth : offsetX} 
                 y1={radY + radHeight + 15} 
@@ -200,23 +191,25 @@ export const RadiatorVisualizer: React.FC<RadiatorVisualizerProps> = React.memo(
                 textAnchor="middle" 
                 fill={isErrOpp ? '#ef4444' : '#64748b'}
               >
-                Libero: {Math.round(quotes.radToOpposite)}
+                Libero: {quotes.radToOpposite}
               </text>
             </>
           )}
 
-          {/* Radiator Body Width (Always) */}
-          <line x1={radX} y1={radY + radHeight + 40} x2={radX + radWidth} y2={radY + radHeight + 40} stroke="#1e293b" />
-          <text x={radX + radWidth/2} y={radY + radHeight + 52} textAnchor="middle" fill="#1e293b" fontWeight="black">CORPO: {Math.round(quotes.radWidthMm)}</text>
+          {/* Larghezza Calorifero (Sempre presente) */}
+          <line x1={radX} y1={radY + radHeight + 45} x2={radX + radWidth} y2={radY + radHeight + 45} stroke="#1e293b" />
+          <line x1={radX} y1={radY + radHeight + 40} x2={radX} y2={radY + radHeight + 50} stroke="#1e293b" />
+          <line x1={radX + radWidth} y1={radY + radHeight + 40} x2={radX + radWidth} y2={radY + radHeight + 50} stroke="#1e293b" />
+          <text x={radX + radWidth/2} y={radY + radHeight + 60} textAnchor="middle" fill="#1e293b" fontSize="12" fontWeight="black">CORPO: {quotes.radWidthMm}</text>
         </g>
 
-        {/* Valve Height Info */}
+        {/* Indicazione Altezza Valvola */}
         {valveHeight > 0 && (
           <line x1={offsetX - 10} y1={targetValveY} x2={offsetX + canvasWidth + 10} y2={targetValveY} stroke="#ef4444" strokeWidth="0.5" strokeDasharray="4,2" opacity="0.4" />
         )}
       </svg>
 
-      {/* Watt Status Strip */}
+      {/* Striscia Resa Termica */}
       {realWatts && requiredWatts && (
         <div className={`mt-6 w-full p-4 rounded text-white flex justify-between items-center shadow-lg transition-colors ${statusColor}`}>
           <span className="text-[10px] uppercase font-bold opacity-80">Resa Termica Effettiva:</span>
@@ -224,10 +217,10 @@ export const RadiatorVisualizer: React.FC<RadiatorVisualizerProps> = React.memo(
         </div>
       )}
 
-      {/* Legend */}
+      {/* Legenda Efficienza */}
       <div className="mt-6 w-full pt-4 border-t border-slate-100 no-print">
         <h5 className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-3 text-center">Legenda Efficienza Termica</h5>
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-2 text-[9px]">
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-2 text-[9px] leading-tight">
           <div className="flex items-center gap-2"><div className="w-3 h-3 bg-blue-600 rounded-sm"></div> <span className="text-slate-500">Scarso (&le; -200W)</span></div>
           <div className="flex items-center gap-2"><div className="w-3 h-3 bg-sky-400 rounded-sm"></div> <span className="text-slate-500">Basso (&le; -100W)</span></div>
           <div className="flex items-center gap-2"><div className="w-3 h-3 bg-emerald-500 rounded-sm"></div> <span className="text-slate-500">Ottimale (&plusmn; 100W)</span></div>
