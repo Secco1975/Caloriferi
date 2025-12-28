@@ -55,21 +55,34 @@ export const RadiatorVisualizer: React.FC<RadiatorVisualizerProps> = React.memo(
     let radX: number;
     let v1X: number;
     let v2X: number | null = null;
+    let diaphragmX: number = 0;
+    let legendLX: number = 0;
 
     if (valvePosition === ValvePosition.BOTTOM) {
       v1X = offsetX + sideValveDistance * SCALE;
       radX = v1X + 50 * SCALE;
       v2X = radX + radWidth + 50 * SCALE;
+      diaphragmX = v1X + 100 * SCALE;
+      // 'L' spostata verso il centro (destra per valvola sx)
+      legendLX = v1X + 20 * SCALE;
     } else if (valvePosition === ValvePosition.LEFT) {
       v1X = offsetX + sideValveDistance * SCALE;
       radX = v1X + 50 * SCALE;
+      diaphragmX = v1X + 100 * SCALE;
+      legendLX = v1X + 20 * SCALE;
     } else { // RIGHT
       v1X = (offsetX + canvasWidth) - sideValveDistance * SCALE;
       radX = v1X - 50 * SCALE - radWidth;
+      diaphragmX = v1X - 100 * SCALE;
+      // 'L' verso il centro (sinistra per valvola dx)
+      legendLX = v1X - 20 * SCALE;
     }
 
     const targetValveY = offsetY + canvasHeight - (valveHeight * SCALE);
     const radY = targetValveY - (radHeight - 5 * SCALE);
+
+    // Seconda valvola per configurazione verticale
+    const v2YVertical = (valvePosition !== ValvePosition.BOTTOM) ? targetValveY - (valveCenterDistance * SCALE) : null;
 
     // DATI QUOTE
     const quotes = {
@@ -90,14 +103,14 @@ export const RadiatorVisualizer: React.FC<RadiatorVisualizerProps> = React.memo(
       VIEWBOX_SIZE, SCALE, canvasWidth, canvasHeight, offsetX, offsetY, 
       radWidth, radHeight, radX, radY, tubeWidth, 
       tubeCount: Math.floor(displayWidth / elementWidth),
-      elementWidth, displayWidth, v1X, v2X, targetValveY, quotes
+      elementWidth, displayWidth, v1X, v2X, diaphragmX, legendLX, targetValveY, v2YVertical, quotes
     };
   }, [nicheWidth, nicheHeight, valveHeight, sideValveDistance, calculatedWidth, maxWidth, valveCenterDistance, valvePosition]);
 
   const { 
     VIEWBOX_SIZE, SCALE, canvasWidth, canvasHeight, offsetX, offsetY, 
     radWidth, radHeight, radX, radY, tubeWidth, tubeCount, elementWidth, 
-    v1X, v2X, targetValveY, quotes
+    v1X, v2X, diaphragmX, legendLX, targetValveY, v2YVertical, quotes
   } = layout;
 
   const statusColor = useMemo(() => {
@@ -136,9 +149,23 @@ export const RadiatorVisualizer: React.FC<RadiatorVisualizerProps> = React.memo(
           <rect x="0" y={radHeight - 11 * SCALE} width={radWidth} height={8 * SCALE} fill="#f8fafc" stroke="#64748b" strokeWidth="0.5" rx="2" />
         </g>
 
-        {/* Valves */}
+        {/* Cerchio Valvola Principale */}
         <circle cx={v1X} cy={targetValveY} r={FIXED_DOT_RADIUS} fill="#ef4444" />
+        
+        {/* Seconda Valvola (Opposta o Verticale) */}
         {v2X && <circle cx={v2X} cy={targetValveY} r={FIXED_DOT_RADIUS} fill="#ef4444" />}
+        {v2YVertical !== null && <circle cx={v1X} cy={v2YVertical} r={FIXED_DOT_RADIUS} fill="#ef4444" />}
+
+        {/* Lettera Verde L (Accanto a valvola principale) */}
+        <text x={legendLX} y={targetValveY + 4} textAnchor="middle" fill="#10b981" fontSize="14" fontWeight="black">L</text>
+
+        {/* Diaframma (Triangolo rosso posizionato a 10cm dalla valvola) */}
+        {hasDiaphragm && (
+          <polygon 
+            points={`${diaphragmX},${targetValveY - 12} ${diaphragmX - 7},${targetValveY - 2} ${diaphragmX + 7},${targetValveY - 2}`} 
+            fill="#ef4444" 
+          />
+        )}
 
         {/* QUOTE DINAMICHE */}
         <g stroke="#94a3b8" strokeWidth="1" fontSize="10" fontWeight="bold">
