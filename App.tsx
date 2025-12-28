@@ -64,7 +64,8 @@ const App: React.FC = () => {
         model: { label: 'N/A', code: 'N/A', height: 0, interaxis: 0, watts: 0 },
         series: series,
         currentElements: 0,
-        totalLength: 0,
+        bodyLength: 0,
+        totalOccupiedWidth: 0,
         totalWatts: 0,
         requiredWatts: Math.round(calculateWatts(env).watts),
         hasClearanceIssue: false,
@@ -90,31 +91,36 @@ const App: React.FC = () => {
     const requiredWatts = calculateWatts(env).watts;
     const baseElements = Math.ceil(requiredWatts / (closest.watts || 1));
     const finalElements = env.specs.manualElements ?? baseElements;
-    const totalLength = finalElements * 45;
+    
+    // Calcolo Ingombri
+    // L'ingombro totale è calcolato sottraendo la "distanza valvola lato" (misura dal centro valvola in poi)
+    const bodyLength = finalElements * 45;
+    const { sideValveDistance, valvePosition, maxWidth } = env.specs;
+    let totalOccupiedWidth = 0;
+    
+    if (valvePosition === ValvePosition.BOTTOM) {
+      // FORMULA BASSE (senza sideValveDistance): 52 (V1 a corpo) + Lunghezza Corpo + 52 (corpo a V2) + 50 (oltre V2)
+      totalOccupiedWidth = 52 + bodyLength + 52 + 50;
+    } else {
+      // FORMULA LATERALE (senza sideValveDistance): 52 (V a corpo) + Lunghezza Corpo + 62 (lato opposto)
+      totalOccupiedWidth = 52 + bodyLength + 62;
+    }
+    
+    // Integrazione eccentrici: +50 mm se necessari
+    if (needsEccentric) {
+      totalOccupiedWidth += 50;
+    }
 
-    const { nicheWidth, sideValveDistance, valvePosition } = env.specs;
     let hasClearanceIssue = false;
 
-    if (nicheWidth > 0) {
-      // Riduzione di 50mm se necessari eccentrici (Integrazione C)
-      const eccentricPenalty = needsEccentric ? 50 : 0;
+    // Controllo vs Ingombro Max (calcolato come nicheWidth - sideValveDistance)
+    if (maxWidth > 0 && totalOccupiedWidth > maxWidth) {
+      hasClearanceIssue = true;
+    }
 
-      if (valvePosition === ValvePosition.BOTTOM) {
-        // Ingombro: Distanza lato + 50 (valvola 1) + Corpo + 50 (valvola 2)
-        const totalOccupied = sideValveDistance + 50 + totalLength + 50;
-        const rightGap = nicheWidth - totalOccupied;
-        if (sideValveDistance < 50 || rightGap < 50) {
-          hasClearanceIssue = true;
-        }
-      } else {
-        // Ingombro: Distanza lato + 50 (valvola) + Corpo + eventuale riduzione eccentrico lato opposto
-        const totalOccupied = sideValveDistance + 50 + totalLength + eccentricPenalty;
-        const remainingGap = nicheWidth - totalOccupied;
-        // Deve esserci 50mm a sinistra (sideValveDistance) e 50mm liberi totali dopo il corpo (già inclusi eccentricPenalty o minimi 50mm)
-        if (sideValveDistance < 50 || remainingGap < 50) {
-          hasClearanceIssue = true;
-        }
-      }
+    // Controllo distanze minime richieste (sempre valide)
+    if (sideValveDistance < 50) {
+      hasClearanceIssue = true;
     }
 
     return {
@@ -123,7 +129,8 @@ const App: React.FC = () => {
       eccentricText: eccentricText,
       needsEccentric: needsEccentric,
       currentElements: finalElements,
-      totalLength: totalLength,
+      bodyLength: bodyLength,
+      totalOccupiedWidth: totalOccupiedWidth,
       totalWatts: Math.round(finalElements * closest.watts),
       requiredWatts: Math.round(requiredWatts),
       hasClearanceIssue: hasClearanceIssue
@@ -162,8 +169,9 @@ const App: React.FC = () => {
       if (i !== activeEnvIndex) return env;
       const updatedSpecs = { ...env.specs, [field]: value };
       
+      // Aggiornamento automatico Ingombro Max basato sulla larghezza nicchia meno la distanza valvola
       if (field === 'nicheWidth' || field === 'sideValveDistance') {
-        updatedSpecs.maxWidth = Math.max(0, (updatedSpecs.nicheWidth || 0) - (updatedSpecs.sideValveDistance || 0) - 50);
+        updatedSpecs.maxWidth = Math.max(0, (updatedSpecs.nicheWidth || 0) - (updatedSpecs.sideValveDistance || 0));
       }
 
       if (['surface', 'height', 'valveCenterDistance', 'series'].includes(field)) {
@@ -182,41 +190,6 @@ const App: React.FC = () => {
     const modelToAdd = { ...newModel, id: Math.random().toString(36).substr(2, 9) };
     setCustomModels(prev => [...prev, modelToAdd]);
     setNewModel({ label: '', code: '', height: 0, interaxis: 0, watts: 0, brand: '' });
-  };
-
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const brandName = prompt("Inserisci il nome del Marchio per questi modelli (es. Fondital):") || "Generico";
-    setIsExtracting(true);
-    try {
-      const reader = new FileReader();
-      reader.onload = async (event) => {
-        const base64Data = (event.target?.result as string).split(',')[1];
-        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-        const response = await ai.models.generateContent({
-          model: 'gemini-3-flash-preview',
-          contents: {
-            parts: [
-              { inlineData: { data: base64Data, mimeType: file.type } },
-              { text: `Extract all radiator technical data from this image/document. Return a JSON array of objects with keys: 'label' (model height name like 200, 300), 'code' (full model code), 'height' (numeric, mm), 'interaxis' (numeric, mm), 'watts' (numeric, Watt at DeltaT 50). Associate with brand: ${brandName}.` }
-            ]
-          },
-          config: {
-            responseMimeType: "application/json"
-          }
-        });
-        const extracted = JSON.parse(response.text || '[]');
-        const modelsWithIds = extracted.map((m: any) => ({ ...m, brand: brandName, id: Math.random().toString(36).substr(2, 9) }));
-        setCustomModels(prev => [...prev, ...modelsWithIds]);
-        setIsExtracting(false);
-        alert(`${modelsWithIds.length} modelli estratti!`);
-      };
-      reader.readAsDataURL(file);
-    } catch (error) {
-      setIsExtracting(false);
-      alert("Errore AI.");
-    }
   };
 
   return (
@@ -376,18 +349,41 @@ const App: React.FC = () => {
 
                   <section className="bg-slate-900 p-8 rounded-[2rem] text-white shadow-2xl space-y-6">
                     <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Configurazione Ottimale</h4>
-                    <div className="grid grid-cols-2 gap-8">
+                    <div className="grid grid-cols-2 gap-y-6 gap-x-8">
                       <div className="col-span-1">
                         <span className="block text-[9px] text-white/50 uppercase mb-1">Modello / Altezza</span>
-                        <span className="text-lg font-bold block">{matchedModelData.model.label} <span className="text-xs opacity-60">/ H {matchedModelData.model.height}mm</span></span>
-                        {matchedModelData.eccentricText && <span className="text-[10px] font-black text-red-500 uppercase leading-none mt-1 block">{matchedModelData.eccentricText}</span>}
+                        <span className="text-lg font-bold block leading-tight">{matchedModelData.model.label} <span className="text-xs opacity-60">/ H {matchedModelData.model.height}mm</span></span>
                       </div>
-                      <div><span className="block text-[9px] text-white/50 uppercase mb-1">Nr. Elementi</span><input type="number" value={matchedModelData.currentElements || ''} onChange={e => handleManualElementsChange(Number(e.target.value))} className="bg-white/10 rounded-lg px-3 py-1 text-lg font-black w-24" /></div>
-                      <div className={matchedModelData.hasClearanceIssue ? 'text-red-400 animate-pulse' : ''}>
+                      <div className="col-span-1">
+                        <span className="block text-[9px] text-white/50 uppercase mb-1">Interasse Modello</span>
+                        <span className="text-lg font-bold block leading-tight">{matchedModelData.model.interaxis} mm</span>
+                      </div>
+                      
+                      <div className="col-span-1">
+                        <span className="block text-[9px] text-white/50 uppercase mb-1">Nr. Elementi</span>
+                        <div className="flex items-center gap-2">
+                          <input type="number" value={matchedModelData.currentElements || ''} onChange={e => handleManualElementsChange(Number(e.target.value))} className="bg-white/10 rounded-lg px-3 py-1 text-lg font-black w-24 text-white" />
+                          <span className="text-[9px] text-white/40 uppercase font-black">pz</span>
+                        </div>
+                      </div>
+                      <div className="col-span-1">
                         <span className="block text-[9px] text-white/50 uppercase mb-1">Ingombro Totale</span>
-                        <span className="text-2xl font-black">{matchedModelData.totalLength}mm</span>
-                        {matchedModelData.hasClearanceIssue && <p className="text-[8px] font-black uppercase mt-1">SPAZIO INSUFFICIENTE (MIN 5cm)</p>}
+                        <div className="flex items-baseline gap-1">
+                          <span className={`text-2xl font-black ${matchedModelData.hasClearanceIssue ? 'text-red-500 animate-pulse' : 'text-white'}`}>
+                            {matchedModelData.totalOccupiedWidth}
+                          </span>
+                          <span className={`text-xs uppercase font-bold ${matchedModelData.hasClearanceIssue ? 'text-red-500' : 'opacity-50 text-white'}`}>mm</span>
+                        </div>
+                        {matchedModelData.hasClearanceIssue && (
+                           <p className="text-[8px] font-black uppercase mt-1 text-red-500 tracking-tighter">SPAZIO INSUFFICIENTE</p>
+                        )}
                       </div>
+
+                      {matchedModelData.eccentricText && (
+                        <div className="col-span-2 border-t border-white/10 pt-3 mt-1">
+                          <span className="text-[10px] font-black text-red-500 uppercase leading-none block">{matchedModelData.eccentricText}</span>
+                        </div>
+                      )}
                     </div>
                   </section>
                 </div>
@@ -395,7 +391,7 @@ const App: React.FC = () => {
                 <div className="space-y-10">
                   <RadiatorVisualizer 
                     specs={activeEnv.specs} 
-                    calculatedWidth={matchedModelData.totalLength} 
+                    calculatedWidth={matchedModelData.bodyLength} 
                     realWatts={matchedModelData.totalWatts} 
                     requiredWatts={matchedModelData.requiredWatts}
                     needsEccentric={matchedModelData.needsEccentric}
@@ -414,7 +410,7 @@ const App: React.FC = () => {
           </div>
         </div>
 
-        {/* Prospetto Riepilogativo (No print) */}
+        {/* Schema Riepilogativo Progetto (No print) */}
         <div className="no-print mt-12 bg-white p-8 rounded-3xl border border-slate-200 shadow-sm">
            <h3 className="text-lg font-black text-slate-900 uppercase tracking-widest mb-6">Schema Riepilogativo Progetto</h3>
            <div className="overflow-x-auto">
@@ -425,7 +421,8 @@ const App: React.FC = () => {
                    <th className="py-3 px-2">Gamma Prodotto</th>
                    <th className="py-3 px-2">Modello</th>
                    <th className="py-3 px-2 text-center">Elementi</th>
-                   <th className="py-3 px-2 text-center">Larghezza</th>
+                   <th className="py-3 px-2 text-center">Larghezza Corpo</th>
+                   <th className="py-3 px-2 text-center">Ingombro Totale</th>
                    <th className="py-3 px-2 text-center">Resa Effettiva</th>
                    <th className="py-3 px-2 text-center">Diaframma</th>
                    <th className="py-3 px-2">Tubo</th>
@@ -440,7 +437,8 @@ const App: React.FC = () => {
                       <td className="py-4 px-2">{env.specs.series}</td>
                       <td className="py-4 px-2">{data.model.label} (H {data.model.height} / Int {data.model.interaxis})</td>
                       <td className="py-4 px-2 text-center font-black">{data.currentElements}</td>
-                      <td className="py-4 px-2 text-center font-bold">{data.totalLength} mm</td>
+                      <td className="py-4 px-2 text-center font-bold">{data.bodyLength} mm</td>
+                      <td className="py-4 px-2 text-center font-bold text-slate-500">{data.totalOccupiedWidth} mm</td>
                       <td className="py-4 px-2 text-center font-bold text-slate-700">{data.totalWatts} W</td>
                       <td className="py-4 px-2 text-center">{env.specs.hasDiaphragm ? 'SI' : 'NO'}</td>
                       <td className="py-4 px-2">{env.specs.pipeMaterial} {env.specs.pipeDiameter}</td>
@@ -453,7 +451,7 @@ const App: React.FC = () => {
         </div>
       </div>
 
-      {/* Printing Document Section */}
+      {/* Sezione Stampa */}
       <div className="hidden print:block bg-white text-black">
         {activeProject.environments.map((env, index) => {
           const wattsReq = calculateWatts(env).watts;
@@ -485,7 +483,8 @@ const App: React.FC = () => {
                      <p className="flex justify-between"><span>Altezza:</span> <b>{data.model.height} mm</b></p>
                      <p className="flex justify-between"><span>Interasse:</span> <b>{data.model.interaxis} mm</b></p>
                      <p className="flex justify-between"><span>Elementi:</span> <b>{data.currentElements}</b></p>
-                     <p className="flex justify-between text-lg font-black pt-2 border-t"><span>Larghezza Tot:</span> <span>{data.totalLength} mm</span></p>
+                     <p className="flex justify-between"><span>Larghezza Corpo:</span> <b>{data.bodyLength} mm</b></p>
+                     <p className="flex justify-between text-lg font-black pt-2 border-t"><span>Ingombro Totale:</span> <span>{data.totalOccupiedWidth} mm</span></p>
                      <p className="flex justify-between"><span>Diaframma:</span> <b>{env.specs.hasDiaphragm ? 'SÌ' : 'NO'}</b></p>
                      {data.eccentricText && <p className="text-red-600 font-black text-[10px] uppercase">{data.eccentricText}</p>}
                   </div>
@@ -493,7 +492,7 @@ const App: React.FC = () => {
                 <div>
                    <RadiatorVisualizer 
                     specs={env.specs} 
-                    calculatedWidth={data.totalLength} 
+                    calculatedWidth={data.bodyLength} 
                     realWatts={data.totalWatts} 
                     requiredWatts={Math.round(wattsReq)}
                     needsEccentric={data.needsEccentric}
@@ -508,7 +507,7 @@ const App: React.FC = () => {
           );
         })}
 
-        {/* Final Order Page */}
+        {/* Pagina Ordine Fornitore */}
         <div className="p-16 min-h-screen relative flex flex-col" style={{ pageBreakBefore: 'always' }}>
            <div className="mb-12 border-b-4 border-slate-900 pb-6">
               <h1 className="arch-title text-5xl font-black">ORDINE FORNITORE</h1>
@@ -523,7 +522,7 @@ const App: React.FC = () => {
                     <th className="py-4 px-2">Modello (Gamma)</th>
                     <th className="py-4 px-2 text-center">H / Interasse</th>
                     <th className="py-4 px-2 text-center">Elementi</th>
-                    <th className="py-4 px-2 text-center">Larghezza</th>
+                    <th className="py-4 px-2 text-center">Corpo / Totale</th>
                     <th className="py-4 px-2 text-center">Diaframma</th>
                     <th className="py-4 px-2">Impianto (Tubo/Ø)</th>
                   </tr>
@@ -537,7 +536,7 @@ const App: React.FC = () => {
                         <td className="py-6 px-2">{data.model.label} ({env.specs.series})</td>
                         <td className="py-6 px-2 text-center">{data.model.height} / {data.model.interaxis}</td>
                         <td className="py-6 px-2 text-center font-black text-xl">{data.currentElements}</td>
-                        <td className="py-6 px-2 text-center font-bold">{data.totalLength} mm</td>
+                        <td className="py-6 px-2 text-center font-bold">{data.bodyLength} / {data.totalOccupiedWidth} mm</td>
                         <td className="py-6 px-2 text-center">{env.specs.hasDiaphragm ? 'SÌ' : 'NO'}</td>
                         <td className="py-6 px-2">{env.specs.pipeMaterial} / {env.specs.pipeDiameter}</td>
                       </tr>
