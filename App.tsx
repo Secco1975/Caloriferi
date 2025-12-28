@@ -18,7 +18,6 @@ const App: React.FC = () => {
   const [settings, setSettings] = useState<GlobalSettings>(() => loadState('archquote_settings_v3', INITIAL_SETTINGS));
   
   const [showSettings, setShowSettings] = useState(false);
-  const [isExtracting, setIsExtracting] = useState(false);
   const [activeEnvIndex, setActiveEnvIndex] = useState(0);
 
   const [newModel, setNewModel] = useState<RadiatorModel>({
@@ -92,33 +91,26 @@ const App: React.FC = () => {
     const baseElements = Math.ceil(requiredWatts / (closest.watts || 1));
     const finalElements = env.specs.manualElements ?? baseElements;
     
-    // Calcolo Ingombri
-    // L'ingombro totale è calcolato a partire dal centro della valvola (senza sideValveDistance)
     const bodyLength = finalElements * 45;
     const { sideValveDistance, valvePosition, maxWidth } = env.specs;
     let totalOccupiedWidth = 0;
     
     if (valvePosition === ValvePosition.BOTTOM) {
-      // FORMULA BASSE: 52 (V1 a corpo) + Lunghezza Corpo + 52 (corpo a V2) + 50 (oltre V2)
       totalOccupiedWidth = 52 + bodyLength + 52 + 50;
     } else {
-      // FORMULA LATERALE: 52 (V a corpo) + Lunghezza Corpo + 62 (lato opposto)
       totalOccupiedWidth = 52 + bodyLength + 62;
     }
     
-    // Integrazione eccentrici: +50 mm se necessari
     if (needsEccentric) {
       totalOccupiedWidth += 50;
     }
 
     let hasClearanceIssue = false;
 
-    // Controllo vs Ingombro Max
     if (maxWidth > 0 && totalOccupiedWidth > maxWidth) {
       hasClearanceIssue = true;
     }
 
-    // Controllo distanze minime richieste (sempre valide)
     if (sideValveDistance < 50) {
       hasClearanceIssue = true;
     }
@@ -169,7 +161,6 @@ const App: React.FC = () => {
       if (i !== activeEnvIndex) return env;
       const updatedSpecs = { ...env.specs, [field]: value };
       
-      // Aggiornamento automatico Ingombro Max basato sulla larghezza nicchia meno la distanza valvola
       if (field === 'nicheWidth' || field === 'sideValveDistance') {
         updatedSpecs.maxWidth = Math.max(0, (updatedSpecs.nicheWidth || 0) - (updatedSpecs.sideValveDistance || 0));
       }
@@ -410,10 +401,10 @@ const App: React.FC = () => {
           </div>
         </div>
 
-        {/* Schema Riepilogativo Progetto (No print) */}
+        {/* Abaco Caloriferi (Preview No Print) */}
         <div className="no-print mt-12 bg-white p-8 rounded-3xl border border-slate-200 shadow-sm">
            <h3 className="text-lg font-black text-slate-900 uppercase tracking-widest mb-6">
-             Abaco Caloriferi - {activeProject.siteAddress || '(Senza Indirizzo)'} - {activeProject.clientSurname || '(N.D.)'} {activeProject.clientName}
+             Abaco Caloriferi - {activeProject.siteAddress || '(Indirizzo)'} - {activeProject.clientSurname || '(Cognome)'} {activeProject.clientName || '(Nome)'}
            </h3>
            <div className="overflow-x-auto">
              <table className="w-full text-left text-sm">
@@ -453,80 +444,37 @@ const App: React.FC = () => {
         </div>
       </div>
 
-      {/* Sezione Stampa */}
+      {/* SEZIONE STAMPA (LAYOUT A4) */}
       <div className="hidden print:block bg-white text-black">
-        {activeProject.environments.map((env, index) => {
-          const wattsReq = calculateWatts(env).watts;
-          const data = getEnvRadiatorData(env);
-          return (
-            <div key={env.id} className="p-16 min-h-screen relative flex flex-col" style={{ pageBreakAfter: 'always' }}>
-              <div className="flex justify-between items-start mb-12">
-                <div>
-                  <h1 className="arch-title text-4xl font-black text-slate-900">HeatMaster ArchQuote</h1>
-                  <p className="text-sm font-bold text-slate-500 mt-1">Cantiere: {activeProject.clientName} {activeProject.clientSurname}</p>
-                  <p className="text-xs text-slate-400">{activeProject.siteAddress}</p>
-                </div>
-                <div className="text-right">
-                   <p className="text-xs font-bold uppercase tracking-widest text-slate-400">Ambiente #{index + 1}</p>
-                   <p className="text-2xl font-black">{env.name}</p>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-12 items-start mb-12">
-                <div className="space-y-8">
-                  <div className="bg-slate-900 text-white p-8 rounded-3xl">
-                    <p className="text-[10px] uppercase font-bold text-slate-400 mb-2">Fabbisogno Calcolato</p>
-                    <p className="text-5xl font-light tracking-tighter">{Math.round(wattsReq)} <span className="text-xl opacity-50">Watt</span></p>
-                  </div>
-                  <div className="border-2 border-slate-100 p-8 rounded-3xl space-y-4">
-                     <h4 className="text-xs font-black uppercase border-b pb-2">Dati Radiatore</h4>
-                     <p className="flex justify-between"><span>Gamma:</span> <b>{env.specs.series}</b></p>
-                     <p className="flex justify-between"><span>Modello:</span> <b>{data.model.label}</b></p>
-                     <p className="flex justify-between"><span>Altezza:</span> <b>{data.model.height} mm</b></p>
-                     <p className="flex justify-between"><span>Interasse:</span> <b>{data.model.interaxis} mm</b></p>
-                     <p className="flex justify-between"><span>Elementi:</span> <b>{data.currentElements}</b></p>
-                     <p className="flex justify-between"><span>Larghezza Corpo:</span> <b>{data.bodyLength} mm</b></p>
-                     <p className="flex justify-between text-lg font-black pt-2 border-t"><span>Ingombro Totale:</span> <span>{data.totalOccupiedWidth} mm</span></p>
-                     <p className="flex justify-between"><span>Diaframma:</span> <b>{env.specs.hasDiaphragm ? 'SÌ' : 'NO'}</b></p>
-                     {data.eccentricText && <p className="text-red-600 font-black text-[10px] uppercase">{data.eccentricText}</p>}
-                  </div>
-                </div>
-                <div>
-                   <RadiatorVisualizer 
-                    specs={env.specs} 
-                    calculatedWidth={data.bodyLength} 
-                    realWatts={data.totalWatts} 
-                    requiredWatts={Math.round(wattsReq)}
-                    needsEccentric={data.needsEccentric}
-                   />
-                </div>
-              </div>
-              <div className="mt-auto pt-8 border-t flex justify-between items-end">
-                 <p className="text-[10px] text-slate-400">Stampato con HeatMaster ArchQuote v3</p>
-                 <p className="text-[10px] text-slate-400">Pagina {index + 1}</p>
-              </div>
-            </div>
-          );
-        })}
-
-        {/* Pagina Ordine Fornitore */}
-        <div className="p-16 min-h-screen relative flex flex-col" style={{ pageBreakBefore: 'always' }}>
+        
+        {/* PAGINA 1: ABACO CALORIFERI (PRIMA PAGINA) */}
+        <div className="p-16 min-h-screen relative flex flex-col" style={{ pageBreakAfter: 'always' }}>
            <div className="mb-12 border-b-4 border-slate-900 pb-6">
-              <h1 className="arch-title text-5xl font-black">ORDINE FORNITORE</h1>
-              <p className="text-lg mt-2"><b>Cliente:</b> {activeProject.clientName} {activeProject.clientSurname}</p>
-              <p className="text-sm opacity-60"><b>Cantiere:</b> {activeProject.siteAddress}</p>
+              <p className="text-xs font-bold uppercase tracking-widest text-slate-400 mb-1">Documentazione Tecnica Progetto</p>
+              <h1 className="arch-title text-4xl font-black">ABACO CALORIFERI</h1>
+              <div className="mt-8 grid grid-cols-2 gap-4 text-sm">
+                <div>
+                  <p className="text-slate-500 uppercase text-[10px] font-bold">Cantiere / Indirizzo</p>
+                  <p className="text-lg font-bold">{activeProject.siteAddress || 'N.D.'}</p>
+                </div>
+                <div>
+                  <p className="text-slate-500 uppercase text-[10px] font-bold">Cliente</p>
+                  <p className="text-lg font-bold">{activeProject.clientSurname || 'N.D.'} {activeProject.clientName || ''}</p>
+                </div>
+              </div>
            </div>
+           
            <div className="flex-1">
-              <table className="w-full text-left text-sm border-collapse">
+              <table className="w-full text-left text-[11px] border-collapse">
                 <thead>
-                  <tr className="bg-slate-100 border-b-2 border-slate-900">
+                  <tr className="bg-slate-50 border-b-2 border-slate-900">
                     <th className="py-4 px-2">Ambiente</th>
                     <th className="py-4 px-2">Modello (Gamma)</th>
                     <th className="py-4 px-2 text-center">H / Interasse</th>
                     <th className="py-4 px-2 text-center">Elementi</th>
                     <th className="py-4 px-2 text-center">Corpo / Totale</th>
                     <th className="py-4 px-2 text-center">Diaframma</th>
-                    <th className="py-4 px-2">Impianto (Tubo/Ø)</th>
+                    <th className="py-4 px-2">Impianto</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -534,27 +482,100 @@ const App: React.FC = () => {
                     const data = getEnvRadiatorData(env);
                     return (
                       <tr key={env.id} className="border-b border-slate-200">
-                        <td className="py-6 px-2 font-bold">{env.name}</td>
-                        <td className="py-6 px-2">{data.model.label} ({env.specs.series})</td>
-                        <td className="py-6 px-2 text-center">{data.model.height} / {data.model.interaxis}</td>
-                        <td className="py-6 px-2 text-center font-black text-xl">{data.currentElements}</td>
-                        <td className="py-6 px-2 text-center font-bold">{data.bodyLength} / {data.totalOccupiedWidth} mm</td>
-                        <td className="py-6 px-2 text-center">{env.specs.hasDiaphragm ? 'SÌ' : 'NO'}</td>
-                        <td className="py-6 px-2">{env.specs.pipeMaterial} / {env.specs.pipeDiameter}</td>
+                        <td className="py-4 px-2 font-bold">{env.name}</td>
+                        <td className="py-4 px-2">{data.model.label} ({env.specs.series})</td>
+                        <td className="py-4 px-2 text-center">{data.model.height} / {data.model.interaxis}</td>
+                        <td className="py-4 px-2 text-center font-black text-lg">{data.currentElements}</td>
+                        <td className="py-4 px-2 text-center font-bold">{data.bodyLength} / {data.totalOccupiedWidth} mm</td>
+                        <td className="py-4 px-2 text-center">{env.specs.hasDiaphragm ? 'SÌ' : 'NO'}</td>
+                        <td className="py-4 px-2">{env.specs.pipeMaterial} {env.specs.pipeDiameter}</td>
                       </tr>
                     );
                   })}
                 </tbody>
               </table>
            </div>
-           <footer className="mt-20 flex justify-between items-end border-t pt-8">
+
+           <footer className="mt-20 pt-8 border-t flex justify-between items-end">
               <div>
                 <div className="w-48 h-px bg-slate-900 mb-2"></div>
                 <p className="text-[10px] uppercase font-bold">Data e Firma Progettista</p>
               </div>
-              <p className="text-[10px] text-slate-300">Pagina Ordine — Fine Progetto</p>
+              <p className="text-[10px] text-slate-300">Pagina 1 — Abaco Riepilogativo Generale</p>
            </footer>
         </div>
+
+        {/* PAGINE SUCCESSIVE: SCHEDE AMBIENTE INDIVIDUALI */}
+        {activeProject.environments.map((env, index) => {
+          const wattsReq = calculateWatts(env).watts;
+          const data = getEnvRadiatorData(env);
+          return (
+            <div key={env.id} className="p-16 min-h-screen relative flex flex-col" style={{ pageBreakAfter: 'always' }}>
+              <div className="flex justify-between items-start mb-12 border-b pb-4">
+                <div>
+                  <h1 className="arch-title text-3xl font-black text-slate-900">Scheda Tecnica Radiatore</h1>
+                  <p className="text-sm font-bold text-slate-500 mt-1">Cliente: {activeProject.clientSurname} {activeProject.clientName}</p>
+                  <p className="text-xs text-slate-400">Cantiere: {activeProject.siteAddress}</p>
+                </div>
+                <div className="text-right">
+                   <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Pagina Locale #{index + 1}</p>
+                   <p className="text-2xl font-black">{env.name}</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-12 items-start mb-12">
+                <div className="space-y-8">
+                  <div className="bg-slate-900 text-white p-8 rounded-3xl shadow-lg">
+                    <p className="text-[10px] uppercase font-bold text-slate-400 mb-2">Fabbisogno Termico</p>
+                    <p className="text-5xl font-light tracking-tighter">{Math.round(wattsReq)} <span className="text-xl opacity-50">Watt</span></p>
+                  </div>
+                  
+                  <div className="border-2 border-slate-100 p-8 rounded-3xl space-y-4">
+                     <h4 className="text-xs font-black uppercase border-b pb-2 text-slate-900">Specifiche Selezionate</h4>
+                     <p className="flex justify-between text-sm"><span>Gamma:</span> <b>{env.specs.series}</b></p>
+                     <p className="flex justify-between text-sm"><span>Modello:</span> <b>{data.model.label}</b></p>
+                     <p className="flex justify-between text-sm"><span>Altezza:</span> <b>{data.model.height} mm</b></p>
+                     <p className="flex justify-between text-sm"><span>Interasse:</span> <b>{data.model.interaxis} mm</b></p>
+                     <p className="flex justify-between text-sm"><span>Elementi:</span> <b className="text-xl">{data.currentElements} pz</b></p>
+                     <p className="flex justify-between text-sm"><span>Larghezza Corpo:</span> <b>{data.bodyLength} mm</b></p>
+                     <p className="flex justify-between text-lg font-black pt-2 border-t text-slate-900"><span>Ingombro Totale:</span> <span>{data.totalOccupiedWidth} mm</span></p>
+                     <p className="flex justify-between text-sm"><span>Resa Effettiva:</span> <b className="text-emerald-600 font-black">{data.totalWatts} W</b></p>
+                     <p className="flex justify-between text-sm"><span>Diaframma:</span> <b>{env.specs.hasDiaphragm ? 'SÌ' : 'NO'}</b></p>
+                     {data.eccentricText && <p className="text-red-600 font-black text-[10px] uppercase border-t pt-2 animate-pulse">{data.eccentricText}</p>}
+                  </div>
+                </div>
+
+                <div className="flex flex-col gap-6">
+                   <RadiatorVisualizer 
+                    specs={env.specs} 
+                    calculatedWidth={data.bodyLength} 
+                    realWatts={data.totalWatts} 
+                    requiredWatts={Math.round(wattsReq)}
+                    needsEccentric={data.needsEccentric}
+                   />
+                   
+                   <div className="grid grid-cols-2 gap-4">
+                    <div className="border border-slate-100 p-5 rounded-2xl bg-slate-50">
+                      <h5 className="text-[9px] font-black uppercase mb-2 text-slate-400">Dati Impianto</h5>
+                      <p className="text-[11px]"><b>Mat:</b> {env.specs.pipeMaterial}</p>
+                      <p className="text-[11px]"><b>Ø:</b> {env.specs.pipeDiameter}</p>
+                    </div>
+                    <div className="border border-slate-100 p-5 rounded-2xl bg-slate-50">
+                      <h5 className="text-[9px] font-black uppercase mb-2 text-slate-400">Dati Nicchia</h5>
+                      <p className="text-[11px]"><b>L:</b> {env.specs.nicheWidth} mm</p>
+                      <p className="text-[11px]"><b>H:</b> {env.specs.nicheHeight} mm</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-auto pt-8 border-t flex justify-between items-end">
+                 <p className="text-[10px] text-slate-400 uppercase font-bold tracking-widest">HeatMaster ArchQuote Professional Tool</p>
+                 <p className="text-[10px] text-slate-400">Pagina {index + 2}</p>
+              </div>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
