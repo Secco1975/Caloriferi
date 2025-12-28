@@ -21,6 +21,7 @@ export interface RadiatorSpecs {
   nicheWidth: number; // mm
   nicheHeight: number; // mm (altezza nicchia)
   valveHeight: number; // mm (altezza valvola dal fondo nicchia)
+  sideValveDistance: number; // mm (distanza valvola dal lato nicchia)
   maxWidth: number; // mm
   manualElements?: number; // Override manuale numero elementi
   hasDiaphragm: boolean;

@@ -20,6 +20,7 @@ export const INITIAL_SPECS: RadiatorSpecs = {
   nicheWidth: 0,
   nicheHeight: 0,
   valveHeight: 0,
+  sideValveDistance: 0,
   maxWidth: 0,
   hasDiaphragm: false,
   series: RadiatorSeries.TESI3,
