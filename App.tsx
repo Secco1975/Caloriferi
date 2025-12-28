@@ -68,7 +68,8 @@ const App: React.FC = () => {
         totalWatts: 0,
         requiredWatts: Math.round(calculateWatts(env).watts),
         hasClearanceIssue: false,
-        eccentricText: null
+        eccentricText: null,
+        needsEccentric: false
       };
     }
 
@@ -95,18 +96,21 @@ const App: React.FC = () => {
     let hasClearanceIssue = false;
 
     if (nicheWidth > 0) {
-      // Se ci sono eccentrici, aggiungiamo 50mm di ingombro (Requirement: riduzione 5cm)
+      // Riduzione di 50mm se necessari eccentrici (Integrazione C)
       const eccentricPenalty = needsEccentric ? 50 : 0;
 
       if (valvePosition === ValvePosition.BOTTOM) {
+        // Ingombro: Distanza lato + 50 (valvola 1) + Corpo + 50 (valvola 2)
         const totalOccupied = sideValveDistance + 50 + totalLength + 50;
         const rightGap = nicheWidth - totalOccupied;
         if (sideValveDistance < 50 || rightGap < 50) {
           hasClearanceIssue = true;
         }
       } else {
+        // Ingombro: Distanza lato + 50 (valvola) + Corpo + eventuale riduzione eccentrico lato opposto
         const totalOccupied = sideValveDistance + 50 + totalLength + eccentricPenalty;
         const remainingGap = nicheWidth - totalOccupied;
+        // Deve esserci 50mm a sinistra (sideValveDistance) e 50mm liberi totali dopo il corpo (già inclusi eccentricPenalty o minimi 50mm)
         if (sideValveDistance < 50 || remainingGap < 50) {
           hasClearanceIssue = true;
         }
@@ -117,6 +121,7 @@ const App: React.FC = () => {
       model: closest,
       series: series,
       eccentricText: eccentricText,
+      needsEccentric: needsEccentric,
       currentElements: finalElements,
       totalLength: totalLength,
       totalWatts: Math.round(finalElements * closest.watts),
@@ -134,16 +139,6 @@ const App: React.FC = () => {
     setActiveEnvIndex(0);
   };
 
-  const removeProject = (id: string) => {
-    if (projects.length <= 1) return;
-    const nextProjects = projects.filter(p => p.id !== id);
-    setProjects(nextProjects);
-    if (activeProjectId === id) {
-      setActiveProjectId(nextProjects[0].id);
-      setActiveEnvIndex(0);
-    }
-  };
-
   const updateProjectDetails = (field: keyof Project, value: string) => {
     setProjects(prev => prev.map(p => p.id === activeProjectId ? { ...p, [field]: value } : p));
   };
@@ -156,12 +151,6 @@ const App: React.FC = () => {
     };
     setProjects(prev => prev.map(p => p.id === activeProjectId ? { ...p, environments: [...p.environments, newEnv] } : p));
     setActiveEnvIndex(activeProject.environments.length);
-  };
-
-  const removeEnvironment = (idx: number) => {
-    if (activeProject.environments.length <= 1) return;
-    setProjects(prev => prev.map(p => p.id === activeProjectId ? { ...p, environments: p.environments.filter((_, i) => i !== idx) } : p));
-    setActiveEnvIndex(Math.max(0, idx - 1));
   };
 
   const handleEnvNameChange = (name: string) => {
@@ -404,7 +393,13 @@ const App: React.FC = () => {
                 </div>
 
                 <div className="space-y-10">
-                  <RadiatorVisualizer specs={activeEnv.specs} calculatedWidth={matchedModelData.totalLength} realWatts={matchedModelData.totalWatts} requiredWatts={matchedModelData.requiredWatts} />
+                  <RadiatorVisualizer 
+                    specs={activeEnv.specs} 
+                    calculatedWidth={matchedModelData.totalLength} 
+                    realWatts={matchedModelData.totalWatts} 
+                    requiredWatts={matchedModelData.requiredWatts}
+                    needsEccentric={matchedModelData.needsEccentric}
+                  />
                   
                   <section className="bg-white p-8 rounded-3xl border border-slate-200 shadow-inner">
                     <h4 className="text-xs font-black text-slate-900 uppercase tracking-widest mb-6">Specifiche Impianto</h4>
@@ -431,7 +426,7 @@ const App: React.FC = () => {
                    <th className="py-3 px-2">Modello</th>
                    <th className="py-3 px-2 text-center">Elementi</th>
                    <th className="py-3 px-2 text-center">Larghezza</th>
-                   <th className="py-3 px-2 text-center">Resa Termica</th>
+                   <th className="py-3 px-2 text-center">Resa Effettiva</th>
                    <th className="py-3 px-2 text-center">Diaframma</th>
                    <th className="py-3 px-2">Tubo</th>
                  </tr>
@@ -446,7 +441,7 @@ const App: React.FC = () => {
                       <td className="py-4 px-2">{data.model.label} (H {data.model.height} / Int {data.model.interaxis})</td>
                       <td className="py-4 px-2 text-center font-black">{data.currentElements}</td>
                       <td className="py-4 px-2 text-center font-bold">{data.totalLength} mm</td>
-                      <td className="py-4 px-2 text-center font-bold text-slate-600">{data.totalWatts} W</td>
+                      <td className="py-4 px-2 text-center font-bold text-slate-700">{data.totalWatts} W</td>
                       <td className="py-4 px-2 text-center">{env.specs.hasDiaphragm ? 'SI' : 'NO'}</td>
                       <td className="py-4 px-2">{env.specs.pipeMaterial} {env.specs.pipeDiameter}</td>
                     </tr>
@@ -460,11 +455,9 @@ const App: React.FC = () => {
 
       {/* Printing Document Section */}
       <div className="hidden print:block bg-white text-black">
-        {/* Page 1 per Environment */}
         {activeProject.environments.map((env, index) => {
           const wattsReq = calculateWatts(env).watts;
           const data = getEnvRadiatorData(env);
-          
           return (
             <div key={env.id} className="p-16 min-h-screen relative flex flex-col" style={{ pageBreakAfter: 'always' }}>
               <div className="flex justify-between items-start mb-12">
@@ -485,24 +478,28 @@ const App: React.FC = () => {
                     <p className="text-[10px] uppercase font-bold text-slate-400 mb-2">Fabbisogno Calcolato</p>
                     <p className="text-5xl font-light tracking-tighter">{Math.round(wattsReq)} <span className="text-xl opacity-50">Watt</span></p>
                   </div>
-                  
                   <div className="border-2 border-slate-100 p-8 rounded-3xl space-y-4">
                      <h4 className="text-xs font-black uppercase border-b pb-2">Dati Radiatore</h4>
-                     <p className="flex justify-between"><span>Gamma:</span> <b>{data.series}</b></p>
+                     <p className="flex justify-between"><span>Gamma:</span> <b>{env.specs.series}</b></p>
                      <p className="flex justify-between"><span>Modello:</span> <b>{data.model.label}</b></p>
                      <p className="flex justify-between"><span>Altezza:</span> <b>{data.model.height} mm</b></p>
                      <p className="flex justify-between"><span>Interasse:</span> <b>{data.model.interaxis} mm</b></p>
                      <p className="flex justify-between"><span>Elementi:</span> <b>{data.currentElements}</b></p>
                      <p className="flex justify-between text-lg font-black pt-2 border-t"><span>Larghezza Tot:</span> <span>{data.totalLength} mm</span></p>
                      <p className="flex justify-between"><span>Diaframma:</span> <b>{env.specs.hasDiaphragm ? 'SÌ' : 'NO'}</b></p>
+                     {data.eccentricText && <p className="text-red-600 font-black text-[10px] uppercase">{data.eccentricText}</p>}
                   </div>
                 </div>
-
                 <div>
-                   <RadiatorVisualizer specs={env.specs} calculatedWidth={data.totalLength} realWatts={data.totalWatts} requiredWatts={Math.round(wattsReq)} />
+                   <RadiatorVisualizer 
+                    specs={env.specs} 
+                    calculatedWidth={data.totalLength} 
+                    realWatts={data.totalWatts} 
+                    requiredWatts={Math.round(wattsReq)}
+                    needsEccentric={data.needsEccentric}
+                   />
                 </div>
               </div>
-
               <div className="mt-auto pt-8 border-t flex justify-between items-end">
                  <p className="text-[10px] text-slate-400">Stampato con HeatMaster ArchQuote v3</p>
                  <p className="text-[10px] text-slate-400">Pagina {index + 1}</p>
@@ -511,14 +508,13 @@ const App: React.FC = () => {
           );
         })}
 
-        {/* Final Order Page (Requirement B) */}
+        {/* Final Order Page */}
         <div className="p-16 min-h-screen relative flex flex-col" style={{ pageBreakBefore: 'always' }}>
            <div className="mb-12 border-b-4 border-slate-900 pb-6">
               <h1 className="arch-title text-5xl font-black">ORDINE FORNITORE</h1>
               <p className="text-lg mt-2"><b>Cliente:</b> {activeProject.clientName} {activeProject.clientSurname}</p>
               <p className="text-sm opacity-60"><b>Cantiere:</b> {activeProject.siteAddress}</p>
            </div>
-
            <div className="flex-1">
               <table className="w-full text-left text-sm border-collapse">
                 <thead>
@@ -538,7 +534,7 @@ const App: React.FC = () => {
                     return (
                       <tr key={env.id} className="border-b border-slate-200">
                         <td className="py-6 px-2 font-bold">{env.name}</td>
-                        <td className="py-6 px-2">{data.model.label} ({data.series})</td>
+                        <td className="py-6 px-2">{data.model.label} ({env.specs.series})</td>
                         <td className="py-6 px-2 text-center">{data.model.height} / {data.model.interaxis}</td>
                         <td className="py-6 px-2 text-center font-black text-xl">{data.currentElements}</td>
                         <td className="py-6 px-2 text-center font-bold">{data.totalLength} mm</td>
@@ -550,15 +546,6 @@ const App: React.FC = () => {
                 </tbody>
               </table>
            </div>
-
-           <div className="mt-12 p-8 border-2 border-dashed border-slate-300 rounded-3xl">
-              <h4 className="font-bold mb-4 uppercase text-xs tracking-widest">Note per la fornitura</h4>
-              <p className="text-sm leading-relaxed">
-                Tutti i caloriferi devono essere forniti pronti per l'installazione secondo gli interassi indicati. 
-                I modelli con diaframma interno devono presentare il tappo/setto di separazione al primo elemento (lato mandata).
-              </p>
-           </div>
-
            <footer className="mt-20 flex justify-between items-end border-t pt-8">
               <div>
                 <div className="w-48 h-px bg-slate-900 mb-2"></div>

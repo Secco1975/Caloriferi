@@ -7,13 +7,15 @@ interface RadiatorVisualizerProps {
   calculatedWidth?: number;
   realWatts?: number;
   requiredWatts?: number;
+  needsEccentric?: boolean;
 }
 
 export const RadiatorVisualizer: React.FC<RadiatorVisualizerProps> = React.memo(({ 
   specs, 
   calculatedWidth, 
   realWatts, 
-  requiredWatts 
+  requiredWatts,
+  needsEccentric = false
 }) => {
   const { 
     valvePosition, 
@@ -63,7 +65,6 @@ export const RadiatorVisualizer: React.FC<RadiatorVisualizerProps> = React.memo(
       radX = v1X + 50 * SCALE;
       v2X = radX + radWidth + 50 * SCALE;
       diaphragmX = v1X + 100 * SCALE;
-      // 'L' spostata verso il centro (destra per valvola sx)
       legendLX = v1X + 20 * SCALE;
     } else if (valvePosition === ValvePosition.LEFT) {
       v1X = offsetX + sideValveDistance * SCALE;
@@ -74,12 +75,15 @@ export const RadiatorVisualizer: React.FC<RadiatorVisualizerProps> = React.memo(
       v1X = (offsetX + canvasWidth) - sideValveDistance * SCALE;
       radX = v1X - 50 * SCALE - radWidth;
       diaphragmX = v1X - 100 * SCALE;
-      // 'L' verso il centro (sinistra per valvola dx)
       legendLX = v1X - 20 * SCALE;
     }
 
     const targetValveY = offsetY + canvasHeight - (valveHeight * SCALE);
-    const radY = targetValveY - (radHeight - 5 * SCALE);
+    
+    // Integrazione A: Il calorifero deve partire da 3,5 cm (35mm) sotto all'altezza della valvola inferiore
+    // Se targetValveY è il centro della valvola, il bordo inferiore del rad è targetValveY + (35 * SCALE)
+    const radYBottom = targetValveY + (35 * SCALE);
+    const radY = radYBottom - radHeight;
 
     // Seconda valvola per configurazione verticale
     const v2YVertical = (valvePosition !== ValvePosition.BOTTOM) ? targetValveY - (valveCenterDistance * SCALE) : null;
@@ -156,8 +160,10 @@ export const RadiatorVisualizer: React.FC<RadiatorVisualizerProps> = React.memo(
         {v2X && <circle cx={v2X} cy={targetValveY} r={FIXED_DOT_RADIUS} fill="#ef4444" />}
         {v2YVertical !== null && <circle cx={v1X} cy={v2YVertical} r={FIXED_DOT_RADIUS} fill="#ef4444" />}
 
-        {/* Lettera Verde L (Accanto a valvola principale) */}
-        <text x={legendLX} y={targetValveY + 4} textAnchor="middle" fill="#10b981" fontSize="14" fontWeight="black">L</text>
+        {/* Lettera Verde L (Solo se presenti eccentrici) */}
+        {needsEccentric && (
+          <text x={legendLX} y={targetValveY + 4} textAnchor="middle" fill="#10b981" fontSize="14" fontWeight="black">L</text>
+        )}
 
         {/* Diaframma (Triangolo rosso posizionato a 10cm dalla valvola) */}
         {hasDiaphragm && (
